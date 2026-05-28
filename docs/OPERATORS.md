@@ -93,3 +93,30 @@ All four reductions operate on the **last** dimension of a tensor of arbitrary r
 - `x / sqrt(mean(x^2) + eps)`, optionally multiplied by a per-channel `weight`.
 - Reference comparison uses an in-tree fp32 formulation (no canonical `torch.rms_norm` in older PyTorch wheels).
 - Default `eps=1e-6` matches LLaMA / Mistral conventions; override per call.
+
+## `matmul`
+
+Standard Triton tutorial layout, lightly cleaned up:
+- `BLOCK_M × BLOCK_N × BLOCK_K` tile with `GROUP_M=8` row-grouping swizzle to improve L2 reuse on grids that exceed the SM count.
+- Autotune key is `(M, N, K)`; configs cover the 64–128 tile family with `num_warps ∈ {4, 8}` and `num_stages ∈ {2, 3}` (20 configs total).
+- K-loop accumulates in `tl.float32` regardless of input dtype; output casts back to the input dtype on store.
+- Non-2D inputs, dtype mismatches, and broadcasting fall through to `torch.matmul` rather than emulating PyTorch's full promotion logic — keeps the kernel scope tight.
+
+### Tolerances
+| dtype     | rtol | atol |
+|-----------|------|------|
+| float16   | 1e-3 | 1e-2 |
+| bfloat16  | 1e-2 | 5e-2 |
+| float32   | 1e-4 | 1e-4 |
+
+Larger atol than the element-wise ops because matmul accumulates `K` products and rounding compounds.
+
+## `fused_residual_layer_norm`
+
+Replaces the common transformer pattern:
+```
+y = layer_norm(x + residual)
+```
+with a single kernel that reads `x` and `residual` once each, adds in fp32, computes the layer-norm mean/var/affine, and writes the output once. Saves one tensor materialization and one kernel launch per transformer block.
+
+Same numerical contract as `layer_norm`. Shape mismatches and `normalized_shape != (last_dim,)` fall back to `torch.nn.functional.layer_norm(input + residual, …)`.

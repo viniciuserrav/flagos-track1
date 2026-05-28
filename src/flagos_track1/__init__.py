@@ -13,6 +13,8 @@ from .pointwise import (
     tanh,
 )
 from .reductions import softmax, log_softmax, layer_norm, rms_norm
+from .matmul import matmul
+from .fused import fused_residual_layer_norm
 
 __all__ = [
     "HAS_TRITON",
@@ -34,5 +36,7 @@ __all__ = [
     "log_softmax",
     "layer_norm",
     "rms_norm",
+    "matmul",
+    "fused_residual_layer_norm",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"

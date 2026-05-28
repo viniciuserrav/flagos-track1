@@ -22,6 +22,8 @@ Triton operator implementations validated against `torch.*` references, with rep
 | `log_softmax` | completed  | per-dtype random over 5 shapes | same | logsumexp stabilized |
 | `layer_norm`  | completed  | per-dtype random over 4 shapes + no-affine path + custom-eps | same | Welford-equivalent single-pass mean/var, fused affine |
 | `rms_norm`    | completed  | per-dtype random over 4 shapes + no-weight path | same | LLaMA-style, fp32 internal accumulator |
+| `matmul`      | completed  | per-dtype random over 5 shapes incl. non-power-of-two + non-2d fallback + non-contig + dtype-mismatch propagation | (planned) | 2-D block-tile w/ GROUP_M swizzle, fp32 accumulator, autotune over BLOCK_M/N/K × stages × warps |
+| `fused_residual_layer_norm` | completed | per-dtype random over 4 shapes + no-affine + shape-mismatch fallback | (planned) | fuses `layer_norm(x + residual)` — saves a kernel launch in transformer blocks |
 
 Each row marked **completed** has:
 1. Triton kernel matching `torch.*` within dtype tolerances (`fp16: rtol=1e-3,atol=1e-3`; `bfloat16: rtol=1e-2,atol=1.6e-2`; `fp32: rtol=1e-5,atol=1.3e-6`).
@@ -39,7 +41,9 @@ src/flagos_track1/   Python package (kernels + wrappers)
   log10.py           the leaderboard-scored op
   pointwise.py       10 element-wise ops sharing a kernel/dispatch template
   reductions.py      4 row-wise reductions (softmax, log_softmax, layer_norm, rms_norm)
-tests/               pytest suite (176 cases, all green on CPU fallback)
+  matmul.py          2-D block-tile matmul with GROUP_M swizzle
+  fused.py           transformer-block fusions (residual + layer_norm)
+tests/               pytest suite (208 cases, all green on CPU fallback)
 benchmarks/          microbenchmark scripts; CSVs written to results/
 notebook/            Kaggle notebook (mirrors the published kernel)
 results/             benchmark CSVs + plots (committed)
@@ -52,7 +56,7 @@ Hardware: any CUDA GPU with `sm_70+` (T4 / A100 / H100 / RTX 20-series+). Falls 
 
 ```bash
 pip install -e .[test]
-pytest tests/                                # 176 cases — all green
+pytest tests/                                # 208 cases — all green
 python benchmarks/bench_log10.py             # writes results/log10_bench.csv
 python benchmarks/bench_pointwise.py         # writes results/pointwise_bench.csv
 python benchmarks/bench_reductions.py        # writes results/reductions_bench.csv
