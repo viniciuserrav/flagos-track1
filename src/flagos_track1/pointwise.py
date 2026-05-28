@@ -136,6 +136,46 @@ if HAS_TRITON:
         y = tl.where(x >= 0, x, NEG_SLOPE * x.to(tl.float32)).to(x.dtype)
         tl.store(y_ptr + offs, y, mask=mask)
 
+    @triton.autotune(configs=_CONFIGS, key=["n_elements"])
+    @triton.jit
+    def _rsqrt_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+        pid = tl.program_id(0)
+        offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offs < n_elements
+        x_in = tl.load(x_ptr + offs, mask=mask, other=1.0)
+        y = (1.0 / tl.sqrt(x_in.to(tl.float32))).to(x_in.dtype)
+        tl.store(y_ptr + offs, y, mask=mask)
+
+    @triton.autotune(configs=_CONFIGS, key=["n_elements"])
+    @triton.jit
+    def _softplus_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+        # softplus(x) = log(1 + exp(x)), with the standard overflow guard
+        # softplus(x) = max(x, 0) + log(1 + exp(-|x|)).
+        pid = tl.program_id(0)
+        offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offs < n_elements
+        x_in = tl.load(x_ptr + offs, mask=mask, other=0.0)
+        x = x_in.to(tl.float32)
+        ax = tl.abs(x)
+        y = tl.maximum(x, 0.0) + tl.log(1.0 + tl.exp(-ax))
+        tl.store(y_ptr + offs, y.to(x_in.dtype), mask=mask)
+
+    @triton.autotune(configs=_CONFIGS, key=["n_elements"])
+    @triton.jit
+    def _mish_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+        # mish(x) = x * tanh(softplus(x)); softplus computed with the overflow guard above.
+        pid = tl.program_id(0)
+        offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offs < n_elements
+        x_in = tl.load(x_ptr + offs, mask=mask, other=0.0)
+        x = x_in.to(tl.float32)
+        ax = tl.abs(x)
+        sp = tl.maximum(x, 0.0) + tl.log(1.0 + tl.exp(-ax))
+        e = tl.exp(2.0 * sp)
+        t = (e - 1.0) / (e + 1.0)
+        y = x * t
+        tl.store(y_ptr + offs, y.to(x_in.dtype), mask=mask)
+
 
 def _fallback_unary(torch_fn, x: torch.Tensor, out: torch.Tensor | None):
     if out is None:
@@ -238,3 +278,35 @@ def leaky_relu(x: torch.Tensor, negative_slope: float = 0.01, *, out: torch.Tens
     grid = lambda meta: (triton.cdiv(n, meta["BLOCK_SIZE"]),)
     _leaky_relu_kernel[grid](x, out, n, float(negative_slope))
     return out
+
+
+def rsqrt(x: torch.Tensor, *, out: torch.Tensor | None = None) -> torch.Tensor:
+    """Drop-in for ``torch.rsqrt`` (reciprocal square root)."""
+    if not use_triton_for(x):
+        return _fallback_unary(torch.rsqrt, x, out)
+    x, out = prepare(x, out)
+    return launch_unary(_rsqrt_kernel, x, out)
+
+
+def softplus(x: torch.Tensor, *, out: torch.Tensor | None = None) -> torch.Tensor:
+    """Drop-in for ``torch.nn.functional.softplus`` (with the standard overflow guard)."""
+    if not use_triton_for(x):
+        ref = torch.nn.functional.softplus(x)
+        if out is not None:
+            out.copy_(ref)
+            return out
+        return ref
+    x, out = prepare(x, out)
+    return launch_unary(_softplus_kernel, x, out)
+
+
+def mish(x: torch.Tensor, *, out: torch.Tensor | None = None) -> torch.Tensor:
+    """Drop-in for ``torch.nn.functional.mish`` — ``x * tanh(softplus(x))``."""
+    if not use_triton_for(x):
+        ref = torch.nn.functional.mish(x)
+        if out is not None:
+            out.copy_(ref)
+            return out
+        return ref
+    x, out = prepare(x, out)
+    return launch_unary(_mish_kernel, x, out)

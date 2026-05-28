@@ -34,6 +34,9 @@ CASES = [
     ("gelu",       fg.gelu,       lambda x: torch.nn.functional.gelu(x, approximate="tanh"), -3.0, 3.0),
     ("silu",       fg.silu,       torch.nn.functional.silu,                                  -3.0, 3.0),
     ("leaky_relu", fg.leaky_relu, torch.nn.functional.leaky_relu,                            -2.0, 2.0),
+    ("rsqrt",      fg.rsqrt,      torch.rsqrt,                                                0.1, 4.0),
+    ("softplus",   fg.softplus,   torch.nn.functional.softplus,                              -4.0, 4.0),
+    ("mish",       fg.mish,       torch.nn.functional.mish,                                  -3.0, 3.0),
 ]
 
 

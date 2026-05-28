@@ -7,9 +7,12 @@ from .pointwise import (
     leaky_relu,
     log,
     log1p,
+    mish,
     relu,
+    rsqrt,
     sigmoid,
     silu,
+    softplus,
     tanh,
 )
 from .reductions import softmax, log_softmax, layer_norm, rms_norm
@@ -32,6 +35,9 @@ __all__ = [
     "gelu",
     "silu",
     "leaky_relu",
+    "rsqrt",
+    "softplus",
+    "mish",
     "softmax",
     "log_softmax",
     "layer_norm",
@@ -39,4 +45,4 @@ __all__ = [
     "matmul",
     "fused_residual_layer_norm",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"

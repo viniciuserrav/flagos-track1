@@ -18,6 +18,9 @@ Triton operator implementations validated against `torch.*` references, with rep
 | `gelu`       | completed  | same | same | tanh approximation, matches `torch.nn.functional.gelu(approximate='tanh')` |
 | `silu`       | completed  | same | same | `x * sigmoid(x)` |
 | `leaky_relu` | completed  | same + custom-slope test | same | dispatches `negative_slope` to the kernel |
+| `rsqrt`      | completed  | per-dtype random + edge + multi-shape + empty + non-contig | same | `1 / sqrt(x)` in fp32 |
+| `softplus`   | completed  | same | same | `log(1 + exp(x))` with overflow guard |
+| `mish`       | completed  | same | same | `x * tanh(softplus(x))` with overflow guard |
 | `softmax`     | completed  | per-dtype random over 5 shapes + large-value overflow guard + non-last-dim fallback | `benchmarks/bench_reductions.py` | online-max single-pass kernel, last-dim only |
 | `log_softmax` | completed  | per-dtype random over 5 shapes | same | logsumexp stabilized |
 | `layer_norm`  | completed  | per-dtype random over 4 shapes + no-affine path + custom-eps | same | Welford-equivalent single-pass mean/var, fused affine |
@@ -39,11 +42,11 @@ Experimental work-in-progress ops will be listed in a separate table once they e
 src/flagos_track1/   Python package (kernels + wrappers)
   _runtime.py        Triton import, capability probe, shared autotune grid
   log10.py           the leaderboard-scored op
-  pointwise.py       10 element-wise ops sharing a kernel/dispatch template
+  pointwise.py       13 element-wise ops sharing a kernel/dispatch template
   reductions.py      4 row-wise reductions (softmax, log_softmax, layer_norm, rms_norm)
   matmul.py          2-D block-tile matmul with GROUP_M swizzle
   fused.py           transformer-block fusions (residual + layer_norm)
-tests/               pytest suite (208 cases, all green on CPU fallback)
+tests/               pytest suite (238 cases, all green on CPU fallback)
 benchmarks/          microbenchmark scripts; CSVs written to results/
 notebook/            Kaggle notebook (mirrors the published kernel)
 results/             benchmark CSVs + plots (committed)
@@ -56,7 +59,7 @@ Hardware: any CUDA GPU with `sm_70+` (T4 / A100 / H100 / RTX 20-series+). Falls 
 
 ```bash
 pip install -e .[test]
-pytest tests/                                # 208 cases — all green
+pytest tests/                                # 238 cases — all green
 python benchmarks/bench_log10.py             # writes results/log10_bench.csv
 python benchmarks/bench_pointwise.py         # writes results/pointwise_bench.csv
 python benchmarks/bench_reductions.py        # writes results/reductions_bench.csv

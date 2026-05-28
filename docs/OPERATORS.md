@@ -71,6 +71,15 @@ Wrappers always:
 ### `leaky_relu`
 - `x if x >= 0 else negative_slope * x`. Slope is a `tl.constexpr` so each unique value gets its own kernel binary (cheap — leaky_relu is rarely called with many different slopes).
 
+### `rsqrt`
+- `1 / sqrt(x)` computed in fp32. Used heavily as a fused step inside RMSNorm; keeping it as its own op also covers ad-hoc uses outside the norm wrapper.
+
+### `softplus`
+- `log(1 + exp(x))` with the standard overflow guard `max(x,0) + log(1 + exp(-|x|))` — keeps the kernel stable for large positive `x` without branching.
+
+### `mish`
+- `x * tanh(softplus(x))`. softplus is computed with the overflow guard from above; tanh uses the same `(e^{2x}-1)/(e^{2x}+1)` reformulation as the standalone `tanh` op.
+
 ## Row-wise reductions (last dim)
 
 All four reductions operate on the **last** dimension of a tensor of arbitrary rank. The input is flattened to `(M, N)` where `M = prod(shape[:-1])` and `N = shape[-1]`. Each row is handled by one program; `BLOCK_N = next_pow2(N)` clamped to ≤ 65 536. Wider rows fall back to the `torch.*` reference rather than tiling (kept simple intentionally; tiled variants come in a later pass if benchmarks warrant it).
