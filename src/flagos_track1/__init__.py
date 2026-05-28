@@ -12,6 +12,7 @@ from .pointwise import (
     silu,
     tanh,
 )
+from .reductions import softmax, log_softmax, layer_norm, rms_norm
 
 __all__ = [
     "HAS_TRITON",
@@ -29,5 +30,9 @@ __all__ = [
     "gelu",
     "silu",
     "leaky_relu",
+    "softmax",
+    "log_softmax",
+    "layer_norm",
+    "rms_norm",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

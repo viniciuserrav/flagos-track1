@@ -70,3 +70,26 @@ Wrappers always:
 
 ### `leaky_relu`
 - `x if x >= 0 else negative_slope * x`. Slope is a `tl.constexpr` so each unique value gets its own kernel binary (cheap — leaky_relu is rarely called with many different slopes).
+
+## Row-wise reductions (last dim)
+
+All four reductions operate on the **last** dimension of a tensor of arbitrary rank. The input is flattened to `(M, N)` where `M = prod(shape[:-1])` and `N = shape[-1]`. Each row is handled by one program; `BLOCK_N = next_pow2(N)` clamped to ≤ 65 536. Wider rows fall back to the `torch.*` reference rather than tiling (kept simple intentionally; tiled variants come in a later pass if benchmarks warrant it).
+
+### `softmax`
+- Standard Triton single-pass online-max + sum kernel.
+- Masked tail loaded as `-inf` so the max ignores padding.
+- Tested for large-magnitude inputs to confirm the online-max trick prevents overflow in fp32.
+- Non-last-dim requests are forwarded to `torch.softmax(x, dim=dim)`.
+
+### `log_softmax`
+- Same structure as softmax, returning `x_shift - log(sum(exp(x_shift)))`.
+
+### `layer_norm`
+- Single pass mean + variance in fp32 (Welford-equivalent for fixed row length).
+- Optional affine: `weight` and `bias` consumed in fp32, output cast back to input dtype.
+- `eps` flows in as a runtime float.
+
+### `rms_norm`
+- `x / sqrt(mean(x^2) + eps)`, optionally multiplied by a per-channel `weight`.
+- Reference comparison uses an in-tree fp32 formulation (no canonical `torch.rms_norm` in older PyTorch wheels).
+- Default `eps=1e-6` matches LLaMA / Mistral conventions; override per call.
