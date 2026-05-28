@@ -60,8 +60,11 @@ pytest tests/                                # 208 cases — all green
 python benchmarks/bench_log10.py             # writes results/log10_bench.csv
 python benchmarks/bench_pointwise.py         # writes results/pointwise_bench.csv
 python benchmarks/bench_reductions.py        # writes results/reductions_bench.csv
+python scripts/plot_bench.py                 # writes results/*.png from the CSVs above
 jupyter execute notebook/flagos-track1-log10.ipynb
 ```
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the full pytest suite on Python 3.10 / 3.11 / 3.12 against the CPU fallback path on every push and PR.
 
 ## License
 
