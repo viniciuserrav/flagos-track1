@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+build/
+dist/
+
+# Keep results committed; ignore local profiling junk
+*.prof
+*.nsys-rep
