@@ -34,7 +34,15 @@ Each row marked **completed** has:
 3. Triton autotune over `BLOCK_SIZE × num_warps × num_stages` (24 configs).
 4. Microbenchmark script (vs the `torch.*` reference).
 
-Experimental work-in-progress ops will be listed in a separate table once they exist.
+### Experimental
+
+These have a Triton kernel that compiles and matches `torch.*` on the CPU fallback path, but the kernel itself has not yet been validated end-to-end on a real GPU. Listed separately so the panel knows what to trust.
+
+| operator | status | tests | notes |
+|----------|--------|-------|-------|
+| `experimental.scaled_dot_product_attention` | **experimental** | 9 cases pass on CPU fallback (per-shape + causal flag + custom scale + unsupported-dim and shape-mismatch fallback) | FlashAttention-2-style forward kernel; head_dim ∈ {16, 32, 64, 128}; `is_causal` supported; forward only (no backward yet) |
+
+Promotion to *completed* requires the Triton kernel running on a supported GPU, outputs matching `torch.*` within dtype tolerances, and a microbenchmark committed to `results/`.
 
 ## Layout
 
@@ -46,7 +54,8 @@ src/flagos_track1/   Python package (kernels + wrappers)
   reductions.py      4 row-wise reductions (softmax, log_softmax, layer_norm, rms_norm)
   matmul.py          2-D block-tile matmul with GROUP_M swizzle
   fused.py           transformer-block fusions (residual + layer_norm)
-tests/               pytest suite (239 cases, all green on CPU fallback)
+  experimental.py    work-in-progress ops; kernel compiles + matches torch on CPU fallback, GPU validation pending
+tests/               pytest suite (248 cases, all green on CPU fallback)
 examples/            end-to-end usage (a tiny GPT block using every op)
 benchmarks/          microbenchmark scripts; CSVs written to results/
 notebook/            Kaggle notebook (mirrors the published kernel)
@@ -60,7 +69,7 @@ Hardware: any CUDA GPU with `sm_70+` (T4 / A100 / H100 / RTX 20-series+). Falls 
 
 ```bash
 pip install -e .[test]
-pytest tests/                                # 239 cases — all green
+pytest tests/                                # 248 cases — all green
 python examples/gpt_block.py                 # end-to-end tiny GPT block
 python benchmarks/bench_log10.py             # writes results/log10_bench.csv
 python benchmarks/bench_pointwise.py         # writes results/pointwise_bench.csv

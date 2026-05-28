@@ -18,6 +18,7 @@ from .pointwise import (
 from .reductions import softmax, log_softmax, layer_norm, rms_norm
 from .matmul import matmul
 from .fused import fused_residual_layer_norm
+from . import experimental  # noqa: F401
 
 __all__ = [
     "HAS_TRITON",
@@ -44,5 +45,6 @@ __all__ = [
     "rms_norm",
     "matmul",
     "fused_residual_layer_norm",
+    "experimental",
 ]
-__version__ = "0.5.0"
+__version__ = "0.6.0"
